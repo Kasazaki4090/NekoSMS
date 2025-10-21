@@ -2,6 +2,7 @@ package com.crossbowffs.nekosms.utils;
 
 import android.util.Log;
 import com.crossbowffs.nekosms.BuildConfig;
+import de.robv.android.xposed.XposedBridge;
 
 public final class Xlog {
     private static final String LOG_TAG = BuildConfig.LOG_TAG;
@@ -11,29 +12,26 @@ public final class Xlog {
     private Xlog() { }
 
     private static void log(int priority, String message, Object... args) {
-        if (priority < LOG_LEVEL) {
-            return;
-        }
-
         // Perform string formatting (if the caller passed a throwable
         // as the last argument, it should be ignored)
         message = String.format(message, args);
 
         // If caller also passed a throwable as the last argument,
-        // append its stacktrace to the message (yes I know this is
-        // not safe, but there isn't a much better alternative)
+        // append its stacktrace to the message
         if (args.length > 0 && args[args.length - 1] instanceof Throwable) {
             Throwable throwable = (Throwable)args[args.length - 1];
             String stacktraceStr = Log.getStackTraceString(throwable);
             message += '\n' + stacktraceStr;
         }
 
-        // Write to the default log tag
-        Log.println(priority, LOG_TAG, message);
+        // Write to Android log if priority meets LOG_LEVEL
+        if (priority >= LOG_LEVEL) {
+            Log.println(priority, LOG_TAG, message);
+        }
 
-        // Duplicate to the Xposed log if enabled
-        if (LOG_TO_XPOSED) {
-            Log.println(priority, "Xposed", LOG_TAG + ": " + message);
+        // Write INFO and above to Xposed log, and others if LOG_TO_XPOSED is true
+        if (priority >= Log.INFO || LOG_TO_XPOSED) {
+            XposedBridge.log(LOG_TAG + ": " + message);
         }
     }
 

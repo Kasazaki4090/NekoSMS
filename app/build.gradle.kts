@@ -20,18 +20,25 @@ dependencies {
 
 android {
     namespace = "com.crossbowffs.nekosms"
-    compileSdk = 35
+    compileSdk = 36
+
+    buildFeatures {
+        buildConfig = true
+    }
 
     defaultConfig {
         versionCode = 43
-        versionName = "0.23.0-dev"
+        versionName = "0.24.0-dev"
         minSdk = 19
         targetSdk = 34
-        resourceConfigurations.addAll(listOf("en", "zh-rCN", "ru"))
         buildConfigField("int", "MODULE_VERSION", "19")
         buildConfigField("int", "DATABASE_VERSION", "12")
         buildConfigField("int", "BACKUP_VERSION", "3")
         buildConfigField("String", "LOG_TAG", "\"NekoSMS\"")
+    }
+
+    androidResources {
+        localeFilters.addAll(listOf("en", "zh-rCN", "ru"))
     }
 
     buildTypes {
@@ -41,13 +48,9 @@ android {
         }
 
         getByName("release") {
-            postprocessing {
-                isRemoveUnusedCode = true
-                isRemoveUnusedResources = true
-                isObfuscate = false
-                isOptimizeCode = true
-                proguardFile("proguard-rules.pro")
-            }
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFile("proguard-rules.pro")
             buildConfigField("int", "LOG_LEVEL", "4")
             buildConfigField("boolean", "LOG_TO_XPOSED", "true")
         }
