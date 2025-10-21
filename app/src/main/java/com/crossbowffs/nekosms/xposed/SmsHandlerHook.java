@@ -322,10 +322,28 @@ public class SmsHandlerHook implements IXposedHookLoadPackage {
         }
     }
 
-    // 新增方法：合并 Android 36、35、34 的构造函数挂钩逻辑
     private void hookConstructorModern(XC_LoadPackage.LoadPackageParam lpparam) {
         Xlog.i("Hooking InboundSmsHandler constructor for Android v34+ and above");
         try {
+            Class<?> smsHandlerClass = XposedHelpers.findClass(SMS_HANDLER_CLASS, lpparam.classLoader);
+            Class<?> smsStorageMonitorClass = XposedHelpers.findClass(TELEPHONY_PACKAGE + ".SmsStorageMonitor", lpparam.classLoader);
+            Class<?> phoneClass = XposedHelpers.findClass(TELEPHONY_PACKAGE + ".Phone", lpparam.classLoader);
+
+            // 优先尝试 Android 34 构造函数（不含 FeatureFlags）
+            try {
+                Constructor<?> constructor = XposedHelpers.findConstructorBestMatch(
+                        smsHandlerClass, String.class, Context.class, smsStorageMonitorClass, phoneClass, Looper.class);
+                Xlog.i("Found Android v34 constructor: %s", getConstructorSignature(constructor));
+                XposedHelpers.findAndHookConstructor(SMS_HANDLER_CLASS, lpparam.classLoader,
+                        String.class, Context.class, TELEPHONY_PACKAGE + ".SmsStorageMonitor",
+                        TELEPHONY_PACKAGE + ".Phone", Looper.class,
+                        new ConstructorHook());
+                Xlog.i("Successfully hooked InboundSmsHandler constructor for Android v34");
+                return;
+            } catch (NoSuchMethodError e) {
+                Xlog.i("Android v34 constructor not found, trying v35/v36 with FeatureFlags: %s", e.getMessage());
+            }
+
             // 尝试 Android 36/35 构造函数（包含 FeatureFlags）
             Class<?> featureFlagsClass = null;
             String[] featureFlagsClassNames = { HIDDEN_FEATURE_FLAGS_CLASS, FEATURE_FLAGS_CLASS };
@@ -333,28 +351,27 @@ public class SmsHandlerHook implements IXposedHookLoadPackage {
                 featureFlagsClass = XposedHelpers.findClassIfExists(className, lpparam.classLoader);
                 if (featureFlagsClass != null) {
                     Xlog.i("Found FeatureFlags class: %s", className);
-                    break;
+                    try {
+                        Constructor<?> constructor = XposedHelpers.findConstructorBestMatch(
+                                smsHandlerClass, String.class, Context.class, smsStorageMonitorClass,
+                                phoneClass, Looper.class, featureFlagsClass);
+                        Xlog.i("Found Android v36/v35 constructor: %s", getConstructorSignature(constructor));
+                        XposedHelpers.findAndHookConstructor(SMS_HANDLER_CLASS, lpparam.classLoader,
+                                String.class, Context.class, TELEPHONY_PACKAGE + ".SmsStorageMonitor",
+                                TELEPHONY_PACKAGE + ".Phone", Looper.class, className,
+                                new ConstructorHook());
+                        Xlog.i("Successfully hooked InboundSmsHandler constructor with FeatureFlags");
+                        return;
+                    } catch (NoSuchMethodError e) {
+                        Xlog.w("Constructor with FeatureFlags class %s not found, trying next", className, e);
+                    }
+                } else {
+                    Xlog.w("FeatureFlags class not found at %s, trying next", className);
                 }
-                Xlog.w("FeatureFlags class not found at %s, trying next", className);
             }
 
-            if (featureFlagsClass != null) {
-                // 尝试挂钩 Android 36/35 构造函数
-                XposedHelpers.findAndHookConstructor(SMS_HANDLER_CLASS, lpparam.classLoader,
-                        String.class, Context.class, TELEPHONY_PACKAGE + ".SmsStorageMonitor",
-                        TELEPHONY_PACKAGE + ".Phone", Looper.class, featureFlagsClass,
-                        new ConstructorHook());
-                Xlog.i("Successfully hooked InboundSmsHandler constructor with FeatureFlags");
-                return;
-            }
-
-            // 回退到 Android 34 构造函数（无 FeatureFlags）
-            Xlog.i("Falling back to Android v34 constructor (no FeatureFlags)");
-            XposedHelpers.findAndHookConstructor(SMS_HANDLER_CLASS, lpparam.classLoader,
-                    String.class, Context.class, TELEPHONY_PACKAGE + ".SmsStorageMonitor",
-                    TELEPHONY_PACKAGE + ".Phone", Looper.class,
-                    new ConstructorHook());
-            Xlog.i("Successfully hooked InboundSmsHandler constructor for Android v34");
+            // 如果所有尝试失败，记录错误并跳过
+            Xlog.e("No suitable constructor found for InboundSmsHandler, skipping");
         } catch (Throwable e) {
             Xlog.e("Failed to hook InboundSmsHandler constructor, skipping", e);
         }

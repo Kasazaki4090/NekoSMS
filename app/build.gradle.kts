@@ -28,7 +28,7 @@ android {
 
     defaultConfig {
         versionCode = 43
-        versionName = "0.24.0-dev"
+        versionName = "0.24.1-dev"
         minSdk = 19
         targetSdk = 34
         buildConfigField("int", "MODULE_VERSION", "19")
